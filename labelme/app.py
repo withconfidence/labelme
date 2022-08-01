@@ -856,8 +856,17 @@ class MainWindow(QtWidgets.QMainWindow):
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
 
     def setDirty(self):
+        poly_shapes = self.canvas.shapes
+        for row in range(self.labelList.__len__()):
+            area = self.labelList.measure_size(poly_shapes[row])
+            item = self.labelList.model().item(row, 1)
+            item.setText(area)
+            # pass
+
+        # self.labelItemChanged()
         # Even if we autosave the file, we keep the ability to undo
         self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
+
 
         if self._config["auto_save"] or self.actions.saveAuto.isChecked():
             label_file = osp.splitext(self.imagePath)[0] + ".json"
@@ -1310,15 +1319,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.canvas.editing():
             selected_shapes = []
             for item in self.labelList.selectedItems():
-                selected_shapes.append(item.shape())
+                if isinstance(item, LabelListWidgetItem):
+                    selected_shapes.append(item.shape())
             if selected_shapes:
                 self.canvas.selectShapes(selected_shapes)
             else:
                 self.canvas.deSelectShape()
 
     def labelItemChanged(self, item):
-        shape = item.shape()
-        self.canvas.setShapeVisible(shape, item.checkState() == Qt.Checked)
+        if isinstance(item, LabelListWidgetItem):
+            shape = item.shape()
+            self.canvas.setShapeVisible(shape, item.checkState() == Qt.Checked)
 
     def labelOrderChanged(self):
         self.setDirty()

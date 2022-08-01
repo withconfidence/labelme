@@ -1,3 +1,5 @@
+import decimal
+
 from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
@@ -80,6 +82,7 @@ class LabelListWidgetItem(QtGui.QStandardItem):
 
     def clone(self):
         return LabelListWidgetItem(self.text(), self.shape())
+        # return [LabelListWidgetItem(self.text(), self.shape()), QtGui.QStandardItem("area")]
 
     def setShape(self, shape):
         self.setData(shape, Qt.UserRole)
@@ -104,7 +107,8 @@ class StandardItemModel(QtGui.QStandardItemModel):
         return ret
 
 
-class LabelListWidget(QtWidgets.QListView):
+class LabelListWidget(QtWidgets.QTreeView):
+# class LabelListWidget(QtWidgets.QListView):
 
     itemDoubleClicked = QtCore.Signal(LabelListWidgetItem)
     itemSelectionChanged = QtCore.Signal(list, list)
@@ -114,14 +118,18 @@ class LabelListWidget(QtWidgets.QListView):
         self._selectedItems = []
 
         self.setWindowFlags(Qt.Window)
+        # self.setColumnCount(2)
         self.setModel(StandardItemModel())
         self.model().setItemPrototype(LabelListWidgetItem())
         self.setItemDelegate(HTMLDelegate())
-        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+
+        self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        # self.setSelectionMode(QtWidgets.QAbstractItemView.SelectRows)
+
         self.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
 
-        self.doubleClicked.connect(self.itemDoubleClickedEvent)
+        # self.doubleClicked.connect(self.itemDoubleClickedEvent)
         self.selectionModel().selectionChanged.connect(
             self.itemSelectionChangedEvent
         )
@@ -135,6 +143,18 @@ class LabelListWidget(QtWidgets.QListView):
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
+
+    def measure_size(self, points):
+        # for x, y in points:
+
+        n = len(points)  # of corners
+        area = 0.0
+        for i in range(n):
+            j = (i + 1) % n
+            area += points[i].x() * points[j].x()
+            area -= points[j].x() * points[i].y()
+        area = f"{decimal.Decimal(abs(area) / 2.0):.3E}"
+        return area
 
     @property
     def itemDropped(self):
@@ -161,9 +181,12 @@ class LabelListWidget(QtWidgets.QListView):
         self.scrollTo(self.model().indexFromItem(item))
 
     def addItem(self, item):
+        # item = items[0]
         if not isinstance(item, LabelListWidgetItem):
             raise TypeError("item must be LabelListWidgetItem")
-        self.model().setItem(self.model().rowCount(), 0, item)
+        area = self.measure_size(item.shape().points)
+        # print(f"{area=}")
+        self.model().appendRow([item, QtGui.QStandardItem(area)])
         item.setSizeHint(self.itemDelegate().sizeHint(None, None))
 
     def removeItem(self, item):
