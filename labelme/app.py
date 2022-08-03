@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import decimal
 import functools
 import html
 import math
@@ -10,10 +10,15 @@ import webbrowser
 
 import imgviz
 import natsort
+
 from qtpy import QtCore
 from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
+from qtpy.QtGui import QIntValidator
+from qtpy.QtWidgets import QHBoxLayout
+from qtpy.QtCore import QRegExp
+from qtpy.QtGui import QRegExpValidator
 
 from labelme import __appname__
 from labelme import PY2
@@ -91,6 +96,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle(__appname__)
 
         # Whether we need to save or not.
+        self._ratio_ = 1
+
         self.dirty = False
 
         self._noSelectionSlot = False
@@ -111,14 +118,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.labelList = LabelListWidget()
         self.lastOpenDir = None
 
-        self.flag_dock = self.flag_widget = None
-        self.flag_dock = QtWidgets.QDockWidget(self.tr("Flags"), self)
-        self.flag_dock.setObjectName("Flags")
-        self.flag_widget = QtWidgets.QListWidget()
-        if config["flags"]:
-            self.loadFlags({k: False for k in config["flags"]})
-        self.flag_dock.setWidget(self.flag_widget)
-        self.flag_widget.itemChanged.connect(self.setDirty)
+        # self.flag_dock = self.flag_widget = None
+        # self.flag_dock = QtWidgets.QDockWidget(self.tr("Flags"), self)
+        # self.flag_dock.setObjectName("Flags")
+        # self.flag_widget = QtWidgets.QListWidget()
+        # if config["flags"]:
+        #     self.loadFlags({k: False for k in config["flags"]})
+        # self.flag_dock.setWidget(self.flag_widget)
+        # self.flag_widget.itemChanged.connect(self.setDirty)
+
+        scale_widget = QtWidgets.QWidget()
+        horizontal_layout = QHBoxLayout()
+        ratio_label = QtWidgets.QLabel("Scale Ratio: ")
+        self.ratio_value = QtWidgets.QLineEdit("1")
+        self.ratio_value.setValidator(QRegExpValidator(QRegExp(r'[0-9]*.[0-9]*')))
+        horizontal_layout.addWidget(ratio_label, 0)
+        horizontal_layout.addWidget(self.ratio_value, 1)
+        scale_widget.setLayout(horizontal_layout)
+
+
+        self.ratio_dock = self.ratio_widget = None
+        self.ratio_dock = QtWidgets.QDockWidget(self.tr("Scale Ratio"), self)
+        self.ratio_dock.setObjectName("Scale Ratio")
+        self.ratio_widget = scale_widget  # QtWidgets.QWidget()
+        self.ratio_dock.setWidget(self.ratio_widget)
+        self.ratio_value.editingFinished.connect(self.setDirty)
 
         self.labelList.itemSelectionChanged.connect(self.labelSelectionChanged)
         self.labelList.itemDoubleClicked.connect(self.editLabel)
@@ -192,7 +216,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(scrollArea)
 
         features = QtWidgets.QDockWidget.DockWidgetFeatures()
-        for dock in ["flag_dock", "label_dock", "shape_dock", "file_dock"]:
+        for dock in ["ratio_dock", "label_dock", "shape_dock", "file_dock"]:
             if self._config[dock]["closable"]:
                 features = features | QtWidgets.QDockWidget.DockWidgetClosable
             if self._config[dock]["floatable"]:
@@ -203,7 +227,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._config[dock]["show"] is False:
                 getattr(self, dock).setVisible(False)
 
-        self.addDockWidget(Qt.RightDockWidgetArea, self.flag_dock)
+        # self.addDockWidget(Qt.RightDockWidgetArea, self.flag_dock)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.ratio_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.label_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.shape_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.file_dock)
@@ -597,11 +622,11 @@ class MainWindow(QtWidgets.QMainWindow):
             removePoint=removePoint,
             createMode=createMode,
             editMode=editMode,
-            createRectangleMode=createRectangleMode,
-            createCircleMode=createCircleMode,
+            # createRectangleMode=createRectangleMode,
+            # createCircleMode=createCircleMode,
             createLineMode=createLineMode,
-            createPointMode=createPointMode,
-            createLineStripMode=createLineStripMode,
+            # createPointMode=createPointMode,
+            # createLineStripMode=createLineStripMode,
             zoom=zoom,
             zoomIn=zoomIn,
             zoomOut=zoomOut,
@@ -631,11 +656,11 @@ class MainWindow(QtWidgets.QMainWindow):
             # menu shown at right click
             menu=(
                 createMode,
-                createRectangleMode,
-                createCircleMode,
+                # createRectangleMode,
+                # createCircleMode,
                 createLineMode,
-                createPointMode,
-                createLineStripMode,
+                # createPointMode,
+                # createLineStripMode,
                 editMode,
                 edit,
                 duplicate,
@@ -649,11 +674,11 @@ class MainWindow(QtWidgets.QMainWindow):
             onLoadActive=(
                 close,
                 createMode,
-                createRectangleMode,
-                createCircleMode,
+                # createRectangleMode,
+                # createCircleMode,
                 createLineMode,
-                createPointMode,
-                createLineStripMode,
+                # createPointMode,
+                # createLineStripMode,
                 editMode,
                 brightnessContrast,
             ),
@@ -694,7 +719,7 @@ class MainWindow(QtWidgets.QMainWindow):
         utils.addActions(
             self.menus.view,
             (
-                self.flag_dock.toggleViewAction(),
+                self.ratio_dock.toggleViewAction(),
                 self.label_dock.toggleViewAction(),
                 self.shape_dock.toggleViewAction(),
                 self.file_dock.toggleViewAction(),
@@ -846,20 +871,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menus.edit.clear()
         actions = (
             self.actions.createMode,
-            self.actions.createRectangleMode,
-            self.actions.createCircleMode,
+            # self.actions.createRectangleMode,
+            # self.actions.createCircleMode,
             self.actions.createLineMode,
-            self.actions.createPointMode,
-            self.actions.createLineStripMode,
+            # self.actions.createPointMode,
+            # self.actions.createLineStripMode,
             self.actions.editMode,
         )
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
 
     def setDirty(self):
+        self._ratio_ = float(self.ratio_value.text())
         poly_shapes = self.canvas.shapes
         for row in range(self.labelList.__len__()):
-            area = self.labelList.measure_size(poly_shapes[row])
-            item = self.labelList.model().item(row, 1)
+            area = self.labelList.measure_size(poly_shapes[row], self._ratio_)
+            # actual_area = area * pow(self._ratio_, 2)
+            # actual_area_string = f"{decimal.Decimal(actual_area):.3E}"
+            item = self.labelList.model().item(row, 2)
             item.setText(area)
             # pass
 
@@ -886,11 +914,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dirty = False
         self.actions.save.setEnabled(False)
         self.actions.createMode.setEnabled(True)
-        self.actions.createRectangleMode.setEnabled(True)
-        self.actions.createCircleMode.setEnabled(True)
+        # self.actions.createRectangleMode.setEnabled(True)
+        # self.actions.createCircleMode.setEnabled(True)
         self.actions.createLineMode.setEnabled(True)
-        self.actions.createPointMode.setEnabled(True)
-        self.actions.createLineStripMode.setEnabled(True)
+        # self.actions.createPointMode.setEnabled(True)
+        # self.actions.createLineStripMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = "{} - {}".format(title, self.filename)
@@ -945,8 +973,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
 
     def tutorial(self):
-        url = "https://github.com/wkentaro/labelme/tree/main/examples/tutorial"  # NOQA
-        webbrowser.open(url)
+        url = "Your Tutorial Link"
+        # webbrowser.open(url)
 
     def toggleDrawingSensitive(self, drawing=True):
         """Toggle drawing sensitive.
@@ -963,54 +991,54 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.createMode = createMode
         if edit:
             self.actions.createMode.setEnabled(True)
-            self.actions.createRectangleMode.setEnabled(True)
-            self.actions.createCircleMode.setEnabled(True)
+            # self.actions.createRectangleMode.setEnabled(True)
+            # self.actions.createCircleMode.setEnabled(True)
             self.actions.createLineMode.setEnabled(True)
-            self.actions.createPointMode.setEnabled(True)
-            self.actions.createLineStripMode.setEnabled(True)
+            # self.actions.createPointMode.setEnabled(True)
+            # self.actions.createLineStripMode.setEnabled(True)
         else:
             if createMode == "polygon":
                 self.actions.createMode.setEnabled(False)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
+                # self.actions.createRectangleMode.setEnabled(True)
+                # self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
+                # self.actions.createPointMode.setEnabled(True)
+                # self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "rectangle":
                 self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(False)
-                self.actions.createCircleMode.setEnabled(True)
+                # self.actions.createRectangleMode.setEnabled(False)
+                # self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
+                # self.actions.createPointMode.setEnabled(True)
+                # self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "line":
                 self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
+                # self.actions.createRectangleMode.setEnabled(True)
+                # self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(False)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
+                # self.actions.createPointMode.setEnabled(True)
+                # self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "point":
                 self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
+                # self.actions.createRectangleMode.setEnabled(True)
+                # self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(False)
-                self.actions.createLineStripMode.setEnabled(True)
+                # self.actions.createPointMode.setEnabled(False)
+                # self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
+                # self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(False)
-                self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(True)
+                # self.actions.createLineMode.setEnabled(True)
+                # self.actions.createPointMode.setEnabled(True)
+                # self.actions.createLineStripMode.setEnabled(True)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
-                self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(True)
+                # self.actions.createRectangleMode.setEnabled(True)
+                # self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
-                self.actions.createPointMode.setEnabled(True)
-                self.actions.createLineStripMode.setEnabled(False)
+                # self.actions.createPointMode.setEnabled(True)
+                # self.actions.createLineStripMode.setEnabled(False)
             else:
                 raise ValueError("Unsupported createMode: %s" % createMode)
         self.actions.editMode.setEnabled(not edit)
@@ -1082,6 +1110,16 @@ class MainWindow(QtWidgets.QMainWindow):
         shape.flags = flags
         shape.group_id = group_id
 
+        if not self.uniqLabelList.findItemsByLabel(shape.label):
+            unique_item = self.uniqLabelList.createItemFromLabel(shape.label)
+            self.uniqLabelList.addItem(unique_item)
+            rgb = self._get_rgb_by_label(shape.label)
+            self.uniqLabelList.setItemLabel(unique_item, shape.label, rgb)
+
+            self.labelDialog.addLabelHistory(shape.label)
+            for action in self.actions.onShapesPresent:
+                action.setEnabled(True)
+
         self._update_shape_color(shape)
         if shape.group_id is None:
             item.setText(
@@ -1092,10 +1130,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             item.setText("{} ({})".format(shape.label, shape.group_id))
         self.setDirty()
-        if not self.uniqLabelList.findItemsByLabel(shape.label):
-            item = QtWidgets.QListWidgetItem()
-            item.setData(Qt.UserRole, shape.label)
-            self.uniqLabelList.addItem(item)
+
 
     def fileSearchChanged(self):
         self.importDirImages(
@@ -1261,11 +1296,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         shapes = [format_shape(item.shape()) for item in self.labelList]
         flags = {}
-        for i in range(self.flag_widget.count()):
-            item = self.flag_widget.item(i)
-            key = item.text()
-            flag = item.checkState() == Qt.Checked
-            flags[key] = flag
+        # for i in range(self.flag_widget.count()):
+        #     item = self.flag_widget.item(i)
+        #     key = item.text()
+        #     flag = item.checkState() == Qt.Checked
+        #     flags[key] = flag
         try:
             imagePath = osp.relpath(self.imagePath, osp.dirname(filename))
             imageData = self.imageData if self._config["store_data"] else None
@@ -1544,17 +1579,19 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._config["keep_prev"]:
             prev_shapes = self.canvas.shapes
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(image))
-        flags = {k: False for k in self._config["flags"] or []}
-        if self.labelFile:
-            self.loadLabels(self.labelFile.shapes)
-            if self.labelFile.flags is not None:
-                flags.update(self.labelFile.flags)
-        self.loadFlags(flags)
-        if self._config["keep_prev"] and self.noShapes():
-            self.loadShapes(prev_shapes, replace=False)
-            self.setDirty()
-        else:
-            self.setClean()
+
+        # flags = {k: False for k in self._config["flags"] or []}
+        # if self.labelFile:
+        #     self.loadLabels(self.labelFile.shapes)
+        #     if self.labelFile.flags is not None:
+        #         flags.update(self.labelFile.flags)
+        # self.loadFlags(flags)
+        # if self._config["keep_prev"] and self.noShapes():
+        #     self.loadShapes(prev_shapes, replace=False)
+        #     self.setDirty()
+        # else:
+        #     self.setClean()
+
         self.canvas.setEnabled(True)
         # set zoom values
         is_initial_load = not self.zoom_values

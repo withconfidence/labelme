@@ -50,16 +50,16 @@ class LabelDialog(QtWidgets.QDialog):
         self.edit.editingFinished.connect(self.postProcess)
         if flags:
             self.edit.textChanged.connect(self.updateFlags)
-        self.edit_group_id = QtWidgets.QLineEdit()
-        self.edit_group_id.setPlaceholderText("Group ID")
-        self.edit_group_id.setValidator(
-            QtGui.QRegExpValidator(QtCore.QRegExp(r"\d*"), None)
-        )
+        # self.edit_group_id = QtWidgets.QLineEdit()
+        # self.edit_group_id.setPlaceholderText("Group ID")
+        # self.edit_group_id.setValidator(
+        #     QtGui.QRegExpValidator(QtCore.QRegExp(r"\d*"), None)
+        # )
         layout = QtWidgets.QVBoxLayout()
         if show_text_field:
             layout_edit = QtWidgets.QHBoxLayout()
             layout_edit.addWidget(self.edit, 6)
-            layout_edit.addWidget(self.edit_group_id, 2)
+            # layout_edit.addWidget(self.edit_group_id, 2)
             layout.addLayout(layout_edit)
         # buttons
         self.buttonBox = bb = QtWidgets.QDialogButtonBox(
@@ -218,10 +218,10 @@ class LabelDialog(QtWidgets.QDialog):
             self.resetFlags(text)
         self.edit.setText(text)
         self.edit.setSelection(0, len(text))
-        if group_id is None:
-            self.edit_group_id.clear()
-        else:
-            self.edit_group_id.setText(str(group_id))
+        # if group_id is None:
+        #     self.edit_group_id.clear()
+        # else:
+        #     self.edit_group_id.setText(str(group_id))
         items = self.labelList.findItems(text, QtCore.Qt.MatchFixedString)
         if items:
             if len(items) != 1:
@@ -233,6 +233,6 @@ class LabelDialog(QtWidgets.QDialog):
         if move:
             self.move(QtGui.QCursor.pos())
         if self.exec_():
-            return self.edit.text(), self.getFlags(), self.getGroupId()
+            return self.edit.text(), self.getFlags(), None  # self.getGroupId()
         else:
             return None, None, None

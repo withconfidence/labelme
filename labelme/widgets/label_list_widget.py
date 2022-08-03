@@ -79,6 +79,8 @@ class LabelListWidgetItem(QtGui.QStandardItem):
         self.setCheckState(Qt.Checked)
         self.setEditable(False)
         self.setTextAlignment(Qt.AlignBottom)
+        # self.model().setColumnCount(2)
+        # self.model().setHorizontalHeaderLabels(["Label", "Size"])
 
     def clone(self):
         return LabelListWidgetItem(self.text(), self.shape())
@@ -119,8 +121,10 @@ class LabelListWidget(QtWidgets.QTreeView):
 
         self.setWindowFlags(Qt.Window)
         # self.setColumnCount(2)
-        self.setModel(StandardItemModel())
+        standard_model = StandardItemModel()
+        self.setModel(standard_model)
         self.model().setItemPrototype(LabelListWidgetItem())
+
         self.setItemDelegate(HTMLDelegate())
 
         self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -144,17 +148,25 @@ class LabelListWidget(QtWidgets.QTreeView):
         for i in range(len(self)):
             yield self[i]
 
-    def measure_size(self, points):
+    def measure_size(self, points, ratio=1):
         # for x, y in points:
 
         n = len(points)  # of corners
-        area = 0.0
-        for i in range(n):
-            j = (i + 1) % n
-            area += points[i].x() * points[j].x()
-            area -= points[j].x() * points[i].y()
-        area = f"{decimal.Decimal(abs(area) / 2.0):.3E}"
-        return area
+        if n != 2:
+            area = 0.0
+            for i in range(n):
+                j = (i + 1) % n
+                area += points[i].x() * points[j].y()
+                area -= points[j].x() * points[i].y()
+            area = abs(area) / 2.0
+            actual_area = area * pow(ratio, 2)
+            actual_area_string = f"{decimal.Decimal(actual_area):.3E}"
+            return actual_area_string
+        else:
+            length = pow(pow(points[0].x() - points[1].x(), 2) + pow(points[0].x() - points[1].x(), 2), 0.5)
+            actual_length = length * ratio
+            actual_length = f"{decimal.Decimal(actual_length):.3E}"
+            return actual_length
 
     @property
     def itemDropped(self):
@@ -184,10 +196,19 @@ class LabelListWidget(QtWidgets.QTreeView):
         # item = items[0]
         if not isinstance(item, LabelListWidgetItem):
             raise TypeError("item must be LabelListWidgetItem")
-        area = self.measure_size(item.shape().points)
+        points = item.shape().points
+        if len(points) == 2:
+            shape_type = "Line"
+        else:
+            shape_type = "Polygon"
+        area = self.measure_size(points)
+
         # print(f"{area=}")
-        self.model().appendRow([item, QtGui.QStandardItem(area)])
+        self.model().appendRow([item, QtGui.QStandardItem(shape_type), QtGui.QStandardItem(area)])
         item.setSizeHint(self.itemDelegate().sizeHint(None, None))
+        self.model().setColumnCount(3)
+        self.model().setHorizontalHeaderLabels(["Label", "Shape", "Size"])
+        self.setHeaderHidden(False)
 
     def removeItem(self, item):
         index = self.model().indexFromItem(item)
