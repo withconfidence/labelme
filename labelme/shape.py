@@ -17,6 +17,7 @@ DEFAULT_SELECT_LINE_COLOR = QtGui.QColor(255, 255, 255)  # selected
 DEFAULT_SELECT_FILL_COLOR = QtGui.QColor(0, 255, 0, 155)  # selected
 DEFAULT_VERTEX_FILL_COLOR = QtGui.QColor(0, 255, 0, 255)  # hovering
 DEFAULT_HVERTEX_FILL_COLOR = QtGui.QColor(255, 255, 255, 255)  # hovering
+DEFAULT_RULER_COLOR = QtGui.QColor(255, 0, 0, 255)  # hovering
 
 
 class Shape(object):
@@ -26,6 +27,7 @@ class Shape(object):
 
     # Render handles as circles
     P_ROUND = 1
+    P_RULER = 2
 
     # Flag for the handles we would move if dragging
     MOVE_VERTEX = 0
@@ -93,6 +95,7 @@ class Shape(object):
             "line",
             "circle",
             "linestrip",
+            "ruler"
         ]:
             raise ValueError("Unexpected shape_type: {}".format(value))
         self._shape_type = value
@@ -133,9 +136,12 @@ class Shape(object):
 
     def paint(self, painter):
         if self.points:
-            color = (
-                self.select_line_color if self.selected else self.line_color
-            )
+            if self.shape_type == "ruler":
+                color = DEFAULT_RULER_COLOR
+            else:
+                color = (
+                    self.select_line_color if self.selected else self.line_color
+                )
             pen = QtGui.QPen(color)
             # Try using integer sizes for smoother drawing(?)
             pen.setWidth(max(1, int(round(2.0 / self.scale))))
@@ -189,7 +195,11 @@ class Shape(object):
 
     def drawVertex(self, path, i):
         d = self.point_size / self.scale
-        shape = self.point_type
+        if self.shape_type == "ruler":
+            shape = 2
+        else:
+            shape = self.point_type
+
         point = self.points[i]
         if i == self._highlightIndex:
             size, shape = self._highlightSettings[self._highlightMode]
@@ -198,9 +208,12 @@ class Shape(object):
             self._vertex_fill_color = self.hvertex_fill_color
         else:
             self._vertex_fill_color = self.vertex_fill_color
+
         if shape == self.P_SQUARE:
             path.addRect(point.x() - d / 2, point.y() - d / 2, d, d)
         elif shape == self.P_ROUND:
+            path.addEllipse(point, d / 2.0, d / 2.0)
+        elif shape == self.P_RULER:
             path.addEllipse(point, d / 2.0, d / 2.0)
         else:
             assert False, "unsupported vertex shape"

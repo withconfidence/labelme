@@ -97,6 +97,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Whether we need to save or not.
         self._ratio_ = 1
+        self.ruler_created = False
 
         self.dirty = False
 
@@ -129,20 +130,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
         scale_widget = QtWidgets.QWidget()
         horizontal_layout = QHBoxLayout()
-        ratio_label = QtWidgets.QLabel("Scale Ratio: ")
-        self.ratio_value = QtWidgets.QLineEdit("1")
-        self.ratio_value.setValidator(QRegExpValidator(QRegExp(r'[0-9]*.[0-9]*')))
+        ratio_label = QtWidgets.QLabel("Line Length: ")
+        self.ratio_value_lineEdit = QtWidgets.QLineEdit("1")
+        self.ratio_value_lineEdit.setValidator(QRegExpValidator(QRegExp(r'[0-9]*.[0-9]*')))
         horizontal_layout.addWidget(ratio_label, 0)
-        horizontal_layout.addWidget(self.ratio_value, 1)
+        horizontal_layout.addWidget(self.ratio_value_lineEdit, 1)
         scale_widget.setLayout(horizontal_layout)
 
 
-        self.ratio_dock = self.ratio_widget = None
+        self.ratio_dock = None
         self.ratio_dock = QtWidgets.QDockWidget(self.tr("Scale Ratio"), self)
         self.ratio_dock.setObjectName("Scale Ratio")
         self.ratio_widget = scale_widget  # QtWidgets.QWidget()
         self.ratio_dock.setWidget(self.ratio_widget)
-        self.ratio_value.editingFinished.connect(self.setDirty)
+        self.ratio_value_lineEdit.setEnabled(False)
+        self.ratio_value_lineEdit.editingFinished.connect(self.is_ruler_created)
 
         self.labelList.itemSelectionChanged.connect(self.labelSelectionChanged)
         self.labelList.itemDoubleClicked.connect(self.editLabel)
@@ -375,6 +377,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr("Start drawing lines"),
             enabled=False,
         )
+        createRulerMode = action(
+            self.tr("Create Ruler"),
+            lambda: self.toggleDrawMode(False, createMode="ruler"),
+            shortcuts["create_ruler"],
+            "objects",
+            self.tr("Start drawing ruler"),
+            enabled=False,
+        )
+
         createPointMode = action(
             self.tr("Create Point"),
             lambda: self.toggleDrawMode(False, createMode="point"),
@@ -625,6 +636,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # createRectangleMode=createRectangleMode,
             # createCircleMode=createCircleMode,
             createLineMode=createLineMode,
+            createRulerMode=createRulerMode,
             # createPointMode=createPointMode,
             # createLineStripMode=createLineStripMode,
             zoom=zoom,
@@ -673,13 +685,14 @@ class MainWindow(QtWidgets.QMainWindow):
             ),
             onLoadActive=(
                 close,
-                createMode,
+                # createMode,
+                createRulerMode,
                 # createRectangleMode,
                 # createCircleMode,
-                createLineMode,
+                # createLineMode,
                 # createPointMode,
                 # createLineStripMode,
-                editMode,
+                # editMode,
                 brightnessContrast,
             ),
             onShapesPresent=(saveAs, hideAll, showAll),
@@ -763,7 +776,9 @@ class MainWindow(QtWidgets.QMainWindow):
             save,
             deleteFile,
             None,
+            createRulerMode,
             createMode,
+            createLineMode,
             editMode,
             duplicate,
             copy,
@@ -880,21 +895,35 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
 
+    def get_ratio(self):
+        ruler_length = float(self.ratio_value_lineEdit.text())
+        ruler_points = self.canvas.shapes[0]
+        pixel_length = pow(pow(ruler_points[0].x() - ruler_points[1].x(), 2) + pow(ruler_points[0].y() - ruler_points[1].y(), 2), 0.5)
+        return ruler_length/pixel_length
+
+    def is_ruler_created(self):
+        self._ratio_ = self.get_ratio()
+        if not self.ruler_created:
+            self.ruler_created = True
+            self.toggleDrawMode(True)
+        else:
+            self.setDirty()
+
     def setDirty(self):
-        self._ratio_ = float(self.ratio_value.text())
+
         poly_shapes = self.canvas.shapes
         for row in range(self.labelList.__len__()):
-            area = self.labelList.measure_size(poly_shapes[row], self._ratio_)
+            # row += 1
+            area = self.labelList.measure_size(poly_shapes[row+1], self._ratio_)
             # actual_area = area * pow(self._ratio_, 2)
             # actual_area_string = f"{decimal.Decimal(actual_area):.3E}"
             item = self.labelList.model().item(row, 2)
             item.setText(area)
-            # pass
 
         # self.labelItemChanged()
         # Even if we autosave the file, we keep the ability to undo
-        self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
-
+        if self.canvas.createMode != "ruler":
+            self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
 
         if self._config["auto_save"] or self.actions.saveAuto.isChecked():
             label_file = osp.splitext(self.imagePath)[0] + ".json"
@@ -913,10 +942,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def setClean(self):
         self.dirty = False
         self.actions.save.setEnabled(False)
-        self.actions.createMode.setEnabled(True)
+        self.actions.createRulerMode.setEnabled(True)
+        self.actions.createMode.setEnabled(False)
         # self.actions.createRectangleMode.setEnabled(True)
         # self.actions.createCircleMode.setEnabled(True)
-        self.actions.createLineMode.setEnabled(True)
+        self.actions.createLineMode.setEnabled(False)
         # self.actions.createPointMode.setEnabled(True)
         # self.actions.createLineStripMode.setEnabled(True)
         title = __appname__
@@ -949,6 +979,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.imageData = None
         self.labelFile = None
         self.otherData = None
+        self.ruler_created = False
+        self.ratio_value_lineEdit.setEnabled(False)
         self.canvas.resetState()
 
     def currentItem(self):
@@ -967,10 +999,14 @@ class MainWindow(QtWidgets.QMainWindow):
     # Callbacks
 
     def undoShapeEdit(self):
-        self.canvas.restoreShape()
-        self.labelList.clear()
-        self.loadShapes(self.canvas.shapes)
-        self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
+        try:
+            self.canvas.restoreShape()
+            self.labelList.clear()
+            self.loadShapes(self.canvas.shapes)
+            if self.canvas.createMode != "ruler":
+                self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
+        except:
+            pass
 
     def tutorial(self):
         url = "Your Tutorial Link"
@@ -981,67 +1017,98 @@ class MainWindow(QtWidgets.QMainWindow):
 
         In the middle of drawing, toggling between modes should be disabled.
         """
+
+        if self.canvas.createMode == "ruler":
+            return
         self.actions.editMode.setEnabled(not drawing)
         self.actions.undoLastPoint.setEnabled(drawing)
         self.actions.undo.setEnabled(not drawing)
         self.actions.delete.setEnabled(not drawing)
 
+    def toggleNewFile(self):
+        """Toggle drawing sensitive.
+
+        In the middle of drawing, toggling between modes should be disabled.
+        """
+        self.actions.editMode.setEnabled(False)
+        self.actions.createMode.setEnabled(False)
+        self.actions.undo.setEnabled(False)
+        self.actions.delete.setEnabled(False)
+        self.actions.duplicate.setEnabled(False)
+        self.actions.copy.setEnabled(False)
+        self.actions.paste.setEnabled(False)
+        self.actions.zoom.setEnabled(False)
+        self.actions.fitWidth.setEnabled(False)
+
     def toggleDrawMode(self, edit=True, createMode="polygon"):
         self.canvas.setEditing(edit)
         self.canvas.createMode = createMode
-        if edit:
-            self.actions.createMode.setEnabled(True)
-            # self.actions.createRectangleMode.setEnabled(True)
-            # self.actions.createCircleMode.setEnabled(True)
-            self.actions.createLineMode.setEnabled(True)
-            # self.actions.createPointMode.setEnabled(True)
-            # self.actions.createLineStripMode.setEnabled(True)
-        else:
-            if createMode == "polygon":
-                self.actions.createMode.setEnabled(False)
-                # self.actions.createRectangleMode.setEnabled(True)
-                # self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                # self.actions.createPointMode.setEnabled(True)
-                # self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "rectangle":
-                self.actions.createMode.setEnabled(True)
-                # self.actions.createRectangleMode.setEnabled(False)
-                # self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                # self.actions.createPointMode.setEnabled(True)
-                # self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "line":
-                self.actions.createMode.setEnabled(True)
-                # self.actions.createRectangleMode.setEnabled(True)
-                # self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(False)
-                # self.actions.createPointMode.setEnabled(True)
-                # self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "point":
-                self.actions.createMode.setEnabled(True)
-                # self.actions.createRectangleMode.setEnabled(True)
-                # self.actions.createCircleMode.setEnabled(True)
-                self.actions.createLineMode.setEnabled(True)
-                # self.actions.createPointMode.setEnabled(False)
-                # self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "circle":
-                self.actions.createMode.setEnabled(True)
-                # self.actions.createRectangleMode.setEnabled(True)
-                self.actions.createCircleMode.setEnabled(False)
-                # self.actions.createLineMode.setEnabled(True)
-                # self.actions.createPointMode.setEnabled(True)
-                # self.actions.createLineStripMode.setEnabled(True)
-            elif createMode == "linestrip":
+        if self.ruler_created:
+            if edit:
                 self.actions.createMode.setEnabled(True)
                 # self.actions.createRectangleMode.setEnabled(True)
                 # self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
                 # self.actions.createPointMode.setEnabled(True)
-                # self.actions.createLineStripMode.setEnabled(False)
+                # self.actions.createLineStripMode.setEnabled(True)
+                # self.actions.createRulerMode.setEnabled(True)
             else:
-                raise ValueError("Unsupported createMode: %s" % createMode)
-        self.actions.editMode.setEnabled(not edit)
+                if createMode == "polygon":
+                    self.actions.createMode.setEnabled(False)
+                    # self.actions.createRectangleMode.setEnabled(True)
+                    # self.actions.createCircleMode.setEnabled(True)
+                    self.actions.createLineMode.setEnabled(True)
+                    # self.actions.createPointMode.setEnabled(True)
+                    # self.actions.createLineStripMode.setEnabled(True)
+                elif createMode == "rectangle":
+                    self.actions.createMode.setEnabled(True)
+                    # self.actions.createRectangleMode.setEnabled(False)
+                    # self.actions.createCircleMode.setEnabled(True)
+                    self.actions.createLineMode.setEnabled(True)
+                    # self.actions.createPointMode.setEnabled(True)
+                    # self.actions.createLineStripMode.setEnabled(True)
+                elif createMode == "line":
+                    self.actions.createMode.setEnabled(True)
+                    # self.actions.createRectangleMode.setEnabled(True)
+                    # self.actions.createCircleMode.setEnabled(True)
+                    self.actions.createLineMode.setEnabled(False)
+                    # self.actions.createPointMode.setEnabled(True)
+                    # self.actions.createLineStripMode.setEnabled(True)
+                elif createMode == "point":
+                    self.actions.createMode.setEnabled(True)
+                    # self.actions.createRectangleMode.setEnabled(True)
+                    # self.actions.createCircleMode.setEnabled(True)
+                    self.actions.createLineMode.setEnabled(True)
+                    # self.actions.createPointMode.setEnabled(False)
+                    # self.actions.createLineStripMode.setEnabled(True)
+                elif createMode == "circle":
+                    self.actions.createMode.setEnabled(True)
+                    # self.actions.createRectangleMode.setEnabled(True)
+                    self.actions.createCircleMode.setEnabled(False)
+                    # self.actions.createLineMode.setEnabled(True)
+                    # self.actions.createPointMode.setEnabled(True)
+                    # self.actions.createLineStripMode.setEnabled(True)
+                elif createMode == "linestrip":
+                    self.actions.createMode.setEnabled(True)
+                    # self.actions.createRectangleMode.setEnabled(True)
+                    # self.actions.createCircleMode.setEnabled(True)
+                    self.actions.createLineMode.setEnabled(True)
+                    # self.actions.createPointMode.setEnabled(True)
+                    # self.actions.createLineStripMode.setEnabled(False)
+                elif createMode == "ruler":
+                    self.actions.createMode.setEnabled(False)
+                    # self.actions.createRectangleMode.setEnabled(True)
+                    # self.actions.createCircleMode.setEnabled(True)
+                    self.actions.createLineMode.setEnabled(False)
+                    # self.actions.createPointMode.setEnabled(True)
+                    # self.actions.createLineStripMode.setEnabled(False)
+                    self.actions.createRulerMode.setEnabled(False)
+                else:
+                    raise ValueError("Unsupported createMode: %s" % createMode)
+            self.actions.editMode.setEnabled(not edit)
+        else:
+            # self.ratio_value_lineEdit.setEnabled(True)
+            self.actions.createRulerMode.setEnabled(False)
 
     def setEditMode(self):
         self.toggleDrawMode(True)
@@ -1174,6 +1241,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.edit.setEnabled(n_selected == 1)
 
     def addLabel(self, shape):
+        if self.canvas.createMode == "ruler":
+            return
         if shape.group_id is None:
             text = shape.label
         else:
@@ -1377,6 +1446,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         position MUST be in global coordinates.
         """
+        if self.canvas.createMode == "ruler":
+            self.ratio_value_lineEdit.setEnabled(True)
+            self.toggleDrawMode(True, "ruler")
+            return
         items = self.uniqLabelList.selectedItems()
         text = None
         if items:
@@ -1633,6 +1706,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.paintCanvas()
         self.addRecentFile(self.filename)
         self.toggleActions(True)
+        self.toggleNewFile()
         self.canvas.setFocus()
         self.status(str(self.tr("Loaded %s")) % osp.basename(str(filename)))
         return True

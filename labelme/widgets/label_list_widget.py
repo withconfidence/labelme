@@ -163,7 +163,7 @@ class LabelListWidget(QtWidgets.QTreeView):
             actual_area_string = f"{decimal.Decimal(actual_area):.3E}"
             return actual_area_string
         else:
-            length = pow(pow(points[0].x() - points[1].x(), 2) + pow(points[0].x() - points[1].x(), 2), 0.5)
+            length = pow(pow(points[0].x() - points[1].x(), 2) + pow(points[0].y() - points[1].y(), 2), 0.5)
             actual_length = length * ratio
             actual_length = f"{decimal.Decimal(actual_length):.3E}"
             return actual_length

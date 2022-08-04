@@ -108,6 +108,7 @@ class Canvas(QtWidgets.QWidget):
             "line",
             "point",
             "linestrip",
+            "ruler"
         ]:
             raise ValueError("Unsupported createMode: %s" % value)
         self._createMode = value
@@ -232,6 +233,9 @@ class Canvas(QtWidgets.QWidget):
                 self.line.points = [self.current[0], pos]
                 self.line.shape_type = "circle"
             elif self.createMode == "line":
+                self.line.points = [self.current[0], pos]
+                self.line.close()
+            elif self.createMode == "ruler":
                 self.line.points = [self.current[0], pos]
                 self.line.close()
             elif self.createMode == "point":
@@ -359,7 +363,7 @@ class Canvas(QtWidgets.QWidget):
                         self.line[0] = self.current[-1]
                         if self.current.isClosed():
                             self.finalise()
-                    elif self.createMode in ["rectangle", "circle", "line"]:
+                    elif self.createMode in ["rectangle", "circle", "line", "ruler"]:
                         assert len(self.current.points) == 1
                         self.current.points = self.line.points
                         self.finalise()
